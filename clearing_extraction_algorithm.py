@@ -345,7 +345,7 @@ class LandClassificationModel:
 
     Methods:
       __init__(model, model_name, model_params=None, model_metrics=None): Initializes the LandClassificationModel instance.
-      compute_metrics(lst_y_pred, y_test): Computes accuracy, kappa score, precision, recall, and F1 score for given lists of predicted and true labels.
+      compute_metrics(lst_y_pred, y_test): Computes accuracy, kappa score and F1 score for given lists of predicted and true labels.
       test_model(best_params, X_train, y_train, X_test, y_test): Tests the model with the best parameters.
       create_confusion_matrix(y_pred, y_test): Creates a confusion matrix for the given predicted and true labels.
       predict_for_image(model, img_2d_array, image_dataset): Makes a prediction on the given 2D image array using the given model.
@@ -354,7 +354,7 @@ class LandClassificationModel:
       make_model_report(best_params, X_train, y_train, X_test, y_test, img_2d_arrays, img_datasets, pred_maps): Create a report about the model.
     """
 
-    def __init__(self, model, model_name, model_params=None, model_metrics=None):
+    def __init__(self, model, model_name, model_metrics=None):
         """
         Parameters
         ----------
@@ -370,13 +370,13 @@ class LandClassificationModel:
 
         self.model = model
         self.model_name = model_name
-        self.model_params = model_params
+        self.model_params = self.model.get_params()
         self.model_metrics = model_metrics
 
     @staticmethod
     def compute_metrics(lst_y_pred, y_test):
         """
-        Compute accuracy, kappa score, precision, recall, and F1 score for given lists of predicted and true labels.
+        Compute accuracy, kappa score and F1 score for given lists of predicted and true labels.
 
         Parameters
         ----------
@@ -394,8 +394,6 @@ class LandClassificationModel:
         metrics_dct = {
             "Accuracy": [],
             "Kappa score": [],
-            "Precision": [],
-            "Recall": [],
             "F1 score": [],
         }
         for y_pred in lst_y_pred:
@@ -403,19 +401,13 @@ class LandClassificationModel:
             metrics_dct["Kappa score"].append(
                 round(cohen_kappa_score(y_test, y_pred), 3)
             )
-            metrics_dct["Precision"].append(
-                round(precision_score(y_test, y_pred, average="macro"), 3)
-            )
-            metrics_dct["Recall"].append(
-                round(recall_score(y_test, y_pred, average="macro"), 3)
-            )
             metrics_dct["F1 score"].append(
                 round(f1_score(y_test, y_pred, average="macro"), 3)
             )
 
         return metrics_dct
 
-    def test_model(self, best_params, X_train, y_train, X_test, y_test):
+    def test_model(self, X_train, y_train, X_test, y_test):
         """
         Test the model with the best parameters.
 
@@ -438,8 +430,6 @@ class LandClassificationModel:
         object.
         """
 
-        self.model.set_params(**best_params)
-        self.model_params = best_params
         self.model = self.model.fit(X_train, y_train)
         y_pred = self.model.predict(X_test)
 
@@ -568,7 +558,6 @@ class LandClassificationModel:
 
     def make_model_report(
         self,
-        best_params,
         X_train,
         y_train,
         X_test,
@@ -601,7 +590,7 @@ class LandClassificationModel:
         """
         print(f"Отчет о модели: {self.model_name}")
         print("-----------------------------------------------------------------")
-        y_pred = self.test_model(best_params, X_train, y_train, X_test, y_test)
+        y_pred = self.test_model(X_train, y_train, X_test, y_test)
         print("-----------------------------------------------------------------")
         self.create_confusion_matrix(y_test, y_pred)
         print("-----------------------------------------------------------------")
