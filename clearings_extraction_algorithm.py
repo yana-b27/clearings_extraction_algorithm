@@ -19,7 +19,7 @@ Functions:
     make_feature_matrix: Creates a feature matrix from the given dataset.
 
 Notes:
-    This module is designed to work with satellite images and land classification maps.
+    This module is designed to work with Sentinel-2 satellite images.
     The functions and classes in this module are intended to be used together to
     extract power line clearings from satellite imagery.
 """
@@ -46,8 +46,6 @@ from sklearn.metrics import (
     cohen_kappa_score,
     confusion_matrix,
     ConfusionMatrixDisplay,
-    precision_score,
-    recall_score,
     f1_score,
 )
 
@@ -168,7 +166,7 @@ class ImageDataset:
 
     def compute_indices(self):
         """
-        Method for computing spectralindices from satellite image data.
+        Method for computing spectral indices from satellite image data.
 
         It computes 3 indices: SAVI (Soil Adjusted Vegetation Index), NDWI (Normalized Difference Water Index) and NDBI (Normalized Difference Built-up Index).
         These indices are computed from the red, green, blue, near infrared, and short-wave infrared channels of the satellite image data.
@@ -253,7 +251,7 @@ def rasterize_polygons(url_shapefile, url_raster, url_rasterized_polygons):
 
     Returns
     -------
-    ROI : 2D numpy array
+    roi : 2D numpy array
         2D numpy array of size (height, width) containing ROI class labels
     """
 
@@ -344,14 +342,14 @@ class LandClassificationModel:
       model_metrics (dict, optional): A dictionary of model metrics (e.g. accuracy, kappa score, etc.). Defaults to None.
 
     Methods:
-      __init__(model, model_name, model_params=None, model_metrics=None): Initializes the LandClassificationModel instance.
+      __init__(model, model_name, model_metrics=None): Initializes the LandClassificationModel instance.
       compute_metrics(lst_y_pred, y_test): Computes accuracy, kappa score and F1 score for given lists of predicted and true labels.
-      test_model(best_params, X_train, y_train, X_test, y_test): Tests the model with the best parameters.
+      test_model(X_train, y_train, X_test, y_test): Tests the model with the best parameters.
       create_confusion_matrix(y_pred, y_test): Creates a confusion matrix for the given predicted and true labels.
       predict_for_image(model, img_2d_array, image_dataset): Makes a prediction on the given 2D image array using the given model.
       compute_execution_time(img_2d_array, image_dataset, area_num): Compute the execution time of predicting the class labels for a given 2D image array in seconds using exponential notation.
       visualize_classification_map(pred_maps, map_title): Visualize classification maps.
-      make_model_report(best_params, X_train, y_train, X_test, y_test, img_2d_arrays, img_datasets, pred_maps): Create a report about the model.
+      make_model_report(X_train, y_train, X_test, y_test, img_2d_arrays, img_datasets, pred_maps): Create a report about the model.
     """
 
     def __init__(self, model, model_name, model_metrics=None):
@@ -413,8 +411,14 @@ class LandClassificationModel:
 
         Parameters
         ----------
-        best_params : dict
-            A dictionary of the best parameters (e.g. selected from the validation set) for the model
+        X_train : numpy array
+            The training dataset
+        y_train : numpy array
+            The true labels for the training dataset
+        X_test : numpy array
+            The test dataset
+        y_test : numpy array
+            The true labels for the test dataset
 
         Returns
         -------
@@ -423,8 +427,7 @@ class LandClassificationModel:
 
         Notes
         -----
-        This function sets the model parameters to the best parameters,
-        fits the model to the training data, predicts the labels for the
+        This function fits the model to the training data, predicts the labels for the
         test dataset, computes the metrics, and prints out them.
         The metrics are also stored in the model_metrics attribute of the
         object.
@@ -571,10 +574,14 @@ class LandClassificationModel:
 
         Parameters
         ----------
-        lst_params : list of dict
-            A list of dictionaries of model parameters
-        best_params : dict
-            A dictionary of the best model parameters
+        X_train : numpy array
+            The training features
+        y_train : numpy array
+            The training labels
+        X_test : numpy array
+            The test features
+        y_test : numpy array
+            The test labels
         img_2d_arrays : list of 2D numpy arrays
             A list of 2D numpy arrays of size (height*width, number of channels) containing satellite image data
         img_datasets : list of 3D numpy arrays
@@ -584,7 +591,7 @@ class LandClassificationModel:
 
         Notes
         -----
-        This function prints out the results of the validation of the model parameters,
+        This function prints out the results of the model, including
         the confusion matrix, the average execution time of each experimental area, and the visualization of
         the classification maps for each experimental area.
         """
@@ -792,6 +799,8 @@ def find_clearing_algorithm(url_summer_image, url_winter_image, model):
 
     Parameters
     ----------
+    model : sklearn model
+        Trained machine learning model for land classification
     url_summer_image : str
         URL of the summer satellite image
     url_winter_image : str
