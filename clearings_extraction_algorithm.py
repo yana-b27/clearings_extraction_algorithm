@@ -535,7 +535,7 @@ class LandClassificationModel:
         The color map is defined globally as `class_map`.
         """
 
-        fig, axes = plt.subplots(ncols=3, nrows=1, figsize=(20, 6))
+        fig, axes = plt.subplots(ncols=3, nrows=1, figsize=(20, 6), dpi=200)
         axes = axes.ravel()
         for i, pred_map in zip(list(range(3)), pred_maps):
             scalebar = AnchoredSizeBar(
