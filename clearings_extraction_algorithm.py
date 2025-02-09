@@ -38,7 +38,6 @@ import earthpy.plot as ep
 import spyndex
 from PIL import Image, ImageDraw
 from skimage.morphology import disk
-from skimage import color
 from skimage.morphology import binary_opening
 from skimage.util import img_as_ubyte
 from skimage.feature import canny
@@ -556,7 +555,7 @@ class LandClassModel:
             )
             image_plot = axes[i].imshow(pred_map, cmap=class_map, interpolation="none")
             axes[i].axis("off")
-            axes[i].set_title(f"Участок № {i+1}")
+            axes[i].set_title(f"Участок № {i + 1}")
             scalebar.set_clip_on(False)
             axes[i].add_artist(scalebar)
         ep.draw_legend(image_plot, titles=classes)
@@ -629,9 +628,9 @@ class ClearingsExtractor:
     Methods:
       __init__(self): Initializes the ClearingsExtractor instance.
       edge_detector(self, pred_map): Detects edges of bare lands in a given land classification map.
-      open_basemap(self, basemap_path): Opens a basemap image from a given path and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
+      open_basemap(self, url_image_basemap): Opens a basemap image from a given URL and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
       find_power_line_clearings(self, bare_lands_edges): Finds power line clearings in a given edge image.
-      extract(self, pred_map, basemap_path): Finds power line clearings on a given classification map.
+      extract(self, pred_map, url_image_basemap): Finds power line clearings on a given classification map.
 
     Notes:
       The `edge_detector` method detects the edges using the Canny edge detector.
@@ -657,22 +656,20 @@ class ClearingsExtractor:
             A 2D numpy array of the same size as `pred_map` with the edges of 'Луга' (class №4) after applying Canny edge detection
         """
         model_bare_lands = pred_map == 4
-        bare_lands_without_noise = binary_opening(
-            model_bare_lands, disk(3)
-        )
+        bare_lands_without_noise = binary_opening(model_bare_lands, disk(3))
         bare_lands_edges = canny(bare_lands_without_noise, sigma=5)
 
         return model_bare_lands, bare_lands_without_noise, bare_lands_edges
 
     @staticmethod
-    def open_basemap(basemap_path):
+    def open_basemap(url_image_basemap):
         """
-        Opens a basemap image from a given path and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
+        Opens a basemap image from a given URL and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
 
         Parameters
         ----------
-        basemap_path : str
-            path of the basemap image
+        url_image_basemap : str
+            URL of the basemap image
 
         Returns
         -------
@@ -680,7 +677,7 @@ class ClearingsExtractor:
             3D numpy array of size (height, width, 3) containing the basemap image data with dtype uint8
         """
 
-        image = rxr.open_rasterio(basemap_path)
+        image = rxr.open_rasterio(url_image_basemap)
         image = np.asarray(image)
         rgb_image = np.rollaxis(image[::-1][0:3], 0, 3)
         rgb_image = img_as_ubyte(rgb_image)
@@ -703,22 +700,20 @@ class ClearingsExtractor:
         power_line_clearings : 3D numpy array
             A 3D numpy array of size (height, width, 4) RGBA image containing the detected power line clearings as yellow lines of width 3
         """
-        clearings_boundaries = probabilistic_hough_line(
+        lines = probabilistic_hough_line(
             image=bare_lands_edges, threshold=100, line_length=100, line_gap=50
         )
-        rasterized_clearings = Image.new(
+        power_line_clearings = Image.new(
             "RGBA", (bare_lands_edges.shape[1], bare_lands_edges.shape[0]), (0, 0, 0, 0)
         )
-        draw = ImageDraw.Draw(rasterized_clearings)
-        for line_coordinates in clearings_boundaries:
+        draw = ImageDraw.Draw(power_line_clearings)
+        for line_coordinates in lines:
             draw.line(xy=line_coordinates, fill="yellow", width=3)
-        rasterized_clearings = np.array(rasterized_clearings)
-        
-        rasterized_clearings_1_band = color.rgb2gray(rasterized_clearings[:, :, :3])
+        power_line_clearings = np.array(power_line_clearings)
 
-        return clearings_boundaries, rasterized_clearings, rasterized_clearings_1_band
+        return lines, power_line_clearings
 
-    def extract(self, pred_map, basemap_path):
+    def extract(self, pred_map, url_image_basemap):
         """
         Finds power line clearings on a given classification map.
 
@@ -726,8 +721,8 @@ class ClearingsExtractor:
         ----------
         pred_map : 2D numpy array
             A 2D numpy array of size (height, width) containing predicted class labels
-        basemap_path : str
-            path of the basemap image
+        url_image_basemap : str
+            URL of the basemap image
 
         Returns
         -------
@@ -736,13 +731,12 @@ class ClearingsExtractor:
         """
 
         bare_lands_edges = self.edge_detector(pred_map)[-1]
-        self.open_basemap(basemap_path)
-        power_line_clearings = self.find_power_line_clearings(bare_lands_edges)[-2]
-        power_line_mask = self.find_power_line_clearings(bare_lands_edges)[-1]
+        self.open_basemap(url_image_basemap)
+        power_line_clearings = self.find_power_line_clearings(bare_lands_edges)[-1]
 
-        return power_line_clearings, power_line_mask
+        return power_line_clearings
 
-    def visualize_algorithm_steps(self, pred_maps, images_path):
+    def visualize_algorithm_steps(self, pred_maps, images_url):
         """
         Visualize the results of the power line clearing extraction algorithm steps.
 
@@ -750,8 +744,8 @@ class ClearingsExtractor:
         ----------
         pred_maps : list of 2D numpy arrays
             A list of 2D numpy arrays of size (height, width) containing predicted class labels
-        images_path : list of str
-            A list of paths of the basemap images
+        images_url : list of str
+            A list of URLs of the basemap images
 
         Notes
         -----
@@ -760,36 +754,36 @@ class ClearingsExtractor:
         where each row corresponds to an experimental area and each column corresponds to a step of the algorithm.
         The columns are labeled with the step number and the row is labeled with the experimental area number.
         """
-        fig, ax = plt.subplots(nrows=3, ncols=5, figsize=(32, 20))
-        for row_num, pred_map, image_path in zip(
-            range(len(pred_maps)), pred_maps, images_path
+        fig, ax = plt.subplots(nrows=3, ncols=5, figsize=(21, 13))
+        for row_num, pred_map, image_url in zip(
+            range(len(pred_maps)), pred_maps, images_url
         ):
             model_bare_lands, bare_lands_without_noise, bare_lands_edges = (
                 self.edge_detector(pred_map)
             )
             ax[row_num, 0].imshow(model_bare_lands, cmap="mako")
             ax[row_num, 0].set_title(f"""Маска класса лугов из
-      карты классификации, участок № {row_num+1}""")
+      карты классификации, участок № {row_num + 1}""")
             ax[row_num, 1].imshow(bare_lands_without_noise, cmap="mako")
-            ax[row_num, 1].set_title(f"""Маска класса лугов, 
-      обработанная двоичным открытием, участок № {row_num+1}""")
+            ax[row_num, 1].set_title(f"""Маска класса лугов,
+      обработанная двоичным открытием, участок № {row_num + 1}""")
             ax[row_num, 2].imshow(bare_lands_edges, cmap="mako", interpolation="none")
             ax[row_num, 2].set_title(f"""Результат детектора
-      границ Канни, участок № {row_num+1}""")
-            rgb = self.open_basemap(image_path)
+      границ Канни, участок № {row_num + 1}""")
+            rgb = self.open_basemap(image_url)
             lines, power_line_corridors = self.find_power_line_clearings(
                 bare_lands_edges
-            )[:-1]
+            )
             ax[row_num, 3].imshow(rgb * 12)
             for line in lines:
                 p0, p1 = line
                 ax[row_num, 3].plot((p0[0], p1[0]), (p0[1], p1[1]))
             ax[row_num, 3].set_title(f"""Результат вероятностного
-      преобразования Хафа, участок № {row_num+1}""")
+      преобразования Хафа, участок № {row_num + 1}""")
             ax[row_num, 4].imshow(rgb * 12)
-            ax[row_num, 4].imshow(power_line_corridors)
+            ax[row_num, 4].imshow(power_line_corridors, alpha=0.6)
             ax[row_num, 4].set_title(f"""Результат выделения лесных
-    просек, участок № {row_num+1}""")
+    просек, участок № {row_num + 1}""")
             for col in range(0, 5):
                 ax[row_num, col].axis("off")
         plt.tight_layout()
@@ -797,7 +791,7 @@ class ClearingsExtractor:
         return fig
 
 
-def find_clearing_algorithm(summer_image_path, winter_image_path, model):
+def find_clearing_algorithm(url_summer_image, url_winter_image, model):
     """
     Final algorithm that finds power line clearings in a given land classification map.
 
@@ -805,10 +799,10 @@ def find_clearing_algorithm(summer_image_path, winter_image_path, model):
     ----------
     model : sklearn model
         Trained machine learning model for land classification
-    summer_image_path : str
-        path of the summer satellite image
-    winter_image_path : str
-        path of the winter satellite image
+    url_summer_image : str
+        URL of the summer satellite image
+    url_winter_image : str
+        URL of the winter satellite image
 
     Returns
     -------
@@ -817,19 +811,18 @@ def find_clearing_algorithm(summer_image_path, winter_image_path, model):
     """
 
     image_dataset = ImageDataset()
-    image_dataset.create_dataset(summer_image_path, winter_image_path)
+    image_dataset.create_dataset(url_summer_image, url_winter_image)
     image_dataset.make_image_2d()
     pred_map = LandClassModel.predict_for_image(
         model, image_dataset.image_data_2d_arr, image_dataset.image_data_3d
     )
     clearing_extractor = ClearingsExtractor()
-    power_line_clearings, power_line_mask = clearing_extractor.extract(pred_map, summer_image_path)
+    power_line_clearings = clearing_extractor.extract(pred_map, url_summer_image)
 
-    return power_line_clearings, power_line_mask
+    return power_line_clearings
 
 
 class ClearingsDetectionMetrics:
-    
     """
     A class representing metrics for power line clearings detection.
 
@@ -844,8 +837,14 @@ class ClearingsDetectionMetrics:
     integrity_value : float
         A value representing the integrity of detected power line clearings
     """
-    
-    def __init__(self, power_line_clearings_mask, locations=None, closeness_value=None, integrity_value=None):
+
+    def __init__(
+        self,
+        power_line_clearings_mask,
+        locations=None,
+        closeness_value=None,
+        integrity_value=None,
+    ):
         """
         __init__ method for ClearingsDetectionMetrics class.
 
@@ -864,10 +863,9 @@ class ClearingsDetectionMetrics:
         self.locations = locations
         self.closeness_value = closeness_value
         self.integrity_value = integrity_value
-        
+
     @staticmethod
     def rasterize_vector(vector_filepath, raster_filepath, output_filepath):
-        
         """
         Rasterizes a vector (shapefile) to a raster (GeoTIFF) given a raster template.
 
@@ -891,10 +889,10 @@ class ClearingsDetectionMetrics:
         projection = raster_ds.GetProjection()
         width = raster_ds.RasterXSize
         height = raster_ds.RasterYSize
-        
-        driver = gdal.GetDriverByName('GTiff')
+
+        driver = gdal.GetDriverByName("GTiff")
         output_ds = driver.Create(output_filepath, width, height, 1, gdal.GDT_Byte)
-        
+
         output_ds.SetProjection(projection)
         output_ds.SetGeoTransform(geotransform)
 
@@ -906,10 +904,9 @@ class ClearingsDetectionMetrics:
         vector_ds = None
         raster_ds = None
         output_ds = None
-        
-    @staticmethod    
-    def reduce_power_towers_density(power_towers_shp, reduced_shp):
 
+    @staticmethod
+    def reduce_power_towers_density(power_towers_shp, reduced_shp):
         """
         Reduces the density of power towers in a given shapefile by grouping them into a regular grid of squares of size `grid_size` meters.
 
@@ -932,31 +929,38 @@ class ClearingsDetectionMetrics:
 
         minx, miny, maxx, maxy = gdf.total_bounds
 
-        grid_size = 2000 
+        grid_size = 2000
         grid = []
-        
+
         for x in np.arange(minx, maxx, grid_size):
             for y in np.arange(miny, maxy, grid_size):
-                grid.append(Polygon([(x, y), (x + grid_size, y), (x + grid_size, y + grid_size), (x, y + grid_size)]))
-
+                grid.append(
+                    Polygon(
+                        [
+                            (x, y),
+                            (x + grid_size, y),
+                            (x + grid_size, y + grid_size),
+                            (x, y + grid_size),
+                        ]
+                    )
+                )
 
         grid_gdf = gpd.GeoDataFrame(geometry=grid, crs=gdf.crs)
-        gdf['grid_cell'] = gpd.sjoin(gdf, grid_gdf, how='left', op='within')['index_right']
+        gdf["grid_cell"] = gpd.sjoin(gdf, grid_gdf, how="left", op="within")[
+            "index_right"
+        ]
 
-        reduced_gdf = gdf.groupby('grid_cell').first()
+        reduced_gdf = gdf.groupby("grid_cell").first()
         reduced_gdf.set_crs("EPSG:32647", allow_override=True, inplace=True)
         reduced_gdf.to_file(reduced_shp)
-        
+
     def open_raster(self, raster_filepath):
-        
         raster = rxr.open_rasterio(raster_filepath)
         data = np.zeros((raster.shape[1], raster.shape[2]), dtype=np.uint8)
         data = np.array(raster[0, :, :])
         self.locations = data
-        
-        
+
     def split_points_into_arrays(self):
-    
         """
         Splits a 2D numpy array of power tower locations into individual arrays,
         each containing a single power tower location.
@@ -979,12 +983,11 @@ class ClearingsDetectionMetrics:
             one_point_array = np.zeros_like(self.locations)
             one_point_array[tuple(index)] = 1
             point_arrays.append(one_point_array)
-            
+
         return point_arrays
-    
+
     @staticmethod
     def calculate_distance_matrix(locations_array):
-        
         """
         Calculate the distance matrix for a given array of location of power lines or power tower.
 
@@ -1001,12 +1004,10 @@ class ClearingsDetectionMetrics:
 
         background_mask = locations_array == 0
         distance_matrix = distance_transform_edt(background_mask)
-        
+
         return distance_matrix
 
-
     def mask_distances(self, distance_matrix):
-        
         """
         Masks the distances to power line clearings boundaries by multiplying the distance matrix with the power line clearings mask.
 
@@ -1020,15 +1021,13 @@ class ClearingsDetectionMetrics:
         masked_zeros_distances : 2D numpy masked array
             A 2D numpy masked array of the same size as `distance_matrix` with 0's replaced by np.nan
         """
-        
+
         masked_distances = distance_matrix * self.power_line_clearings_mask
         masked_zeros_distances = np.ma.masked_equal(masked_distances, 0)
+        
         return masked_zeros_distances
 
-        
     def calculate_closeness_value(self, raster_filepath):
-        
-
         """
         Calculates the closeness value from a given raster file of power lines location.
 
@@ -1036,10 +1035,6 @@ class ClearingsDetectionMetrics:
         ----------
         raster_filepath : str
             path of the raster file
-
-        Returns
-        -------
-        None
 
         Notes
         -----
@@ -1052,11 +1047,10 @@ class ClearingsDetectionMetrics:
         distance_matrix = self.calculate_distance_matrix(self.locations)
         masked_zeros_distances = self.mask_distances(distance_matrix)
         median_distance = np.ma.median(masked_zeros_distances)
-        median_distance_meters = median_distance*10
-        self.closeness_value = 1/median_distance_meters
-        
+        median_distance_meters = median_distance * 10
+        self.closeness_value = 1 / median_distance_meters
+
     def calculate_integrity_value(self, raster_filepath):
-        
         """
         Calculates the integrity value from a given raster file of power tower locations.
 
@@ -1064,10 +1058,6 @@ class ClearingsDetectionMetrics:
         ----------
         raster_filepath : str
             path of the raster file
-
-        Returns
-        -------
-        None
 
         Notes
         -----
@@ -1078,7 +1068,7 @@ class ClearingsDetectionMetrics:
         """
         self.open_raster(raster_filepath)
         points_arrays = self.split_points_into_arrays()
-        
+
         sum_min_mask_dist = 0
         n_towers = len(points_arrays)
         for tower in points_arrays:
@@ -1087,6 +1077,5 @@ class ClearingsDetectionMetrics:
             min_mask_dist = masked_zeros_distances.min()
             sum_min_mask_dist += min_mask_dist
         integrity_value = sum_min_mask_dist / n_towers
-        integrity_value_meters = integrity_value*10
-        self.integrity_value = 1/integrity_value_meters
-        
+        integrity_value_meters = integrity_value * 10
+        self.integrity_value = 1 / integrity_value_meters
