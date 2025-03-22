@@ -7,4 +7,7 @@ The project contains:
 - example of how to use the code in `example.ipynb`
 - satellite images in `.tiff` format stored in `images` folder
 - set of polygons for each experimental area in shapefile format stored in `polygons_sets` folder
+- data of power lines stored in `.shp` as line geometry in `power_lines` folder
+- data of power towers stored in `.shp` as point geometry in `power_towers` folder
 - results of clearings extraction algorithm - masks of power line clearings in `.tiff` format stored in `results` folder
+- some plots of visualization of results in `svg_plots` folder
