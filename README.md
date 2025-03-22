@@ -8,12 +8,22 @@ An experiment was conducted and the classification quality metrics accuracy, f1 
 
 The Probabilistic Hough Transform was chosen as the line search algorithm. Before its application, a Gaussian filter is applied to the binary mask of the low-growth vegetation class to distort objects that do not belong to forest clearings, while linear clearings retain linearity. Next, object boundaries were found using binary erosion. Based on the obtained mask of object boundaries, Hough Transform finds lines. Selected lines belong to forest clearings.
 
-The project contains:
-- code of the algorithm in `clearings_extraction_algorithm.py`
-- example of how to use the code in `example.ipynb`
-- satellite images in `.tiff` format stored in `images` folder
-- set of polygons for each experimental area in shapefile format stored in `polygons_sets` folder
-- data of power lines stored in `.shp` as line geometry in `power_lines` folder
-- data of power towers stored in `.shp` as point geometry in `power_towers` folder
-- results of clearings extraction algorithm - masks of power line clearings in `.tiff` format stored in `results` folder
-- some plots of visualization of results in `svg_plots` folder
+## Repository structure
+```
+.
+├── __pycache__/
+├── images/                           # satellite images for testing the algorithm
+├── model/                            # directory of Logistic Regression model
+├── polygons_sets/                    # polygon sets in shapefile format made in QGIS
+├── power_lines/                      # OpenStreetMap linear vector files of power lines for each image
+├── power_towers/                     # OpenStreetMap point vector files of power towers for each image
+├── results/                          # results of the algorithm in georeferenced .tif format
+├── svg_plots/                        # some plots from Jupyter notebooks
+├── LICENSE
+├── README.md
+├── calculate_metrics.ipynb           # Jupyter notebook with example of use of quality metrics for algorithm output
+├── choose_ml_algorithm.ipynb         # Jupyter notebook with selection of machine learning algorithm for classification
+├── clearings_extraction_algorithm.py # file with clearings extraction algorithm
+├── requirements.txt
+└── use_hough_transform.ipynb         # Jupyter notebook with use of Hough transform for line search
+```
