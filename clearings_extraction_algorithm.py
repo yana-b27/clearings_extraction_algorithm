@@ -12,6 +12,7 @@ Classes:
     LandClassificationModel: A class representing a land classification model.
     ClearingsExtractor: A class representing an extractor for power line clearings
         from satellite imagery.
+    ClearingsDetectionMetrics: A class representing metrics for power line clearings detection.
 
 Functions:
     rasterize_polygons: Rasterizes the given shapefile to the given raster, and writes
@@ -40,7 +41,6 @@ import spyndex
 from PIL import Image, ImageDraw
 from skimage.morphology import disk
 from skimage.morphology import binary_opening, binary_erosion
-from skimage.util import img_as_ubyte
 from scipy.ndimage import gaussian_filter
 from skimage.transform import probabilistic_hough_line
 from scipy.ndimage import distance_transform_edt
@@ -336,38 +336,40 @@ def make_feature_matrix(roi, image_dataset):
 
 
 class LandClassModel:
-    """
-    A class representing a land classification model.
-
-    Attributes:
-      model (object): A model object (e.g. from scikit-learn) to be used for satellite image land classification.
-      model_name (str): A string name for the model.
-      model_params (dict, optional): A dictionary of model parameters. Defaults to None.
-      model_metrics (dict, optional): A dictionary of model metrics (e.g. accuracy, kappa score, etc.). Defaults to None.
-
-    Methods:
-      __init__(model, model_name, model_metrics=None): Initializes the LandClassificationModel instance.
-      compute_metrics(lst_y_pred, y_test): Computes accuracy, kappa score and F1 score for given lists of predicted and true labels.
-      test_model(X_train, y_train, X_test, y_test): Tests the model with the best parameters.
-      create_confusion_matrix(y_pred, y_test): Creates a confusion matrix for the given predicted and true labels.
-      predict_for_image(model, img_2d_array, image_dataset): Makes a prediction on the given 2D image array using the given model.
-      compute_execution_time(img_2d_array, image_dataset, area_num): Compute the execution time of predicting the class labels for a given 2D image array in seconds using exponential notation.
-      visualize_classification_map(pred_maps, map_title): Visualize classification maps.
-      make_model_report(X_train, y_train, X_test, y_test, img_2d_arrays, img_datasets, pred_maps): Create a report about the model.
-    """
-
+    '''
+    A class used to represent a Land Classification Model for satellite images.
+    Attributes
+    model_path : str
+        The file path to a pre-trained model to be loaded.
+        A model object (e.g., from scikit-learn) to be used for satellite image land classification.
+    model_params : dict
+        Parameters of the model.
+    model_metrics : dict
+        A dictionary containing model metrics such as accuracy, kappa score, etc.
+    Methods
+    compute_metrics(lst_y_pred, y_test)
+    test_model(X_train, y_train, X_test, y_test)
+    create_confusion_matrix(y_test, y_pred)
+    predict_for_image(img_2d_array, image_dataset)
+    compute_execution_time(img_2d_array, image_dataset, area_num)
+    visualize_classification_map(pred_maps, map_title)
+    make_model_report(X_train, y_train, X_test, y_test, img_2d_arrays, img_datasets, pred_maps)
+    '''
     def __init__(self, model_name, model_metrics=None, model=None, model_path=None):
         """
+        Initializes a LandClassModel instance.
+
         Parameters
         ----------
-        model : object
-            A model object (e.g. from scikit-learn) to be used for satellite image land classification
         model_name : str
-            A string name for the model
-        model_params : dict, optional
-            A dictionary of model parameters, by default None
+            The name of the model.
         model_metrics : dict, optional
-            A dictionary of model metrics (e.g. accuracy, kappa score, etc.), by default None
+            A dictionary containing model metrics such as accuracy, kappa score, etc. Defaults to None.
+        model : object, optional
+            A model object (e.g., from scikit-learn) to be used for satellite image land classification. Defaults to None.
+        model_path : str, optional
+            The file path to a pre-trained model to be loaded. If provided, the model will be loaded from this path. Defaults to None.
+
         """
         self.model_path = model_path
         if self.model_path is None:
@@ -377,6 +379,7 @@ class LandClassModel:
         self.model_name = model_name
         self.model_params = self.model.get_params()
         self.model_metrics = model_metrics
+
 
     @staticmethod
     def compute_metrics(lst_y_pred, y_test):
@@ -631,28 +634,32 @@ class ClearingsExtractor:
     Methods:
       __init__(self): Initializes the ClearingsExtractor instance.
       edge_detector(self, pred_map): Detects edges of bare lands in a given land classification map.
-      open_basemap(self, url_image_basemap): Opens a basemap image from a given URL and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
-      find_power_line_clearings(self, bare_lands_edges): Finds power line clearings in a given edge image.
-      extract(self, pred_map, url_image_basemap): Finds power line clearings on a given classification map.
+      open_basemap(self, image_basemap_path): Opens a basemap image from a given path and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
+      find_lines(self, bare_lands_edges): Finds power line clearings in a given edge image.
+      extract(self, pred_map, summer_image_path): Finds power line clearings on a given classification map.
 
     Notes:
-      The `edge_detector` method detects the edges using the Canny edge detector.
-      The `find_power_line_clearings` method finds power line clearings in an edge image using the probabilistic Hough transform.
+      The `edge_detector` method detects the edges using Gaussian smoothing, setting a threshold for binarization of the resulting image and finding the difference between the binarization result and its binary erosion.
+      The `find_lines` method finds power line clearings in an edge image using the probabilistic Hough transform.
     """
 
     def edge_detector(self, pred_map):
         """
         Detects edges of bare lands in a given land classification map.
 
-        Parameters
+        Parameters:
         ----------
         pred_map : 2D numpy array
-            A 2D numpy array of size (height, width) containing predicted class labels
+            A 2D numpy array of size (height, width) containing predicted class labels.
 
-        Returns
+        Returns:
         -------
-        bare_lands_edges : 2D numpy array
-            A 2D numpy array of the same size as `pred_map` with the edges of 'Луга' (class №4) after applying Canny edge detection
+        model_bare_lands : 2D numpy array
+            A 2D numpy array of size (height, width) containing binary mask of bare lands (Class №4) from land classification map.
+        binary_smoothed_bare_lands : 2D numpy array
+            A 2D numpy array of size (height, width) containing binary mask of smoothed bare lands by gaussian filter.
+        edges : 2D numpy array
+            A 2D numpy array of size (height, width) containing binary mask of edges of bare lands.
         """
         model_bare_lands = pred_map == 4
         bare_lands_without_noise = binary_opening(model_bare_lands, disk(3))
@@ -666,28 +673,6 @@ class ClearingsExtractor:
 
         return model_bare_lands, binary_smoothed_bare_lands, edges
 
-    @staticmethod
-    def open_basemap(url_image_basemap):
-        """
-        Opens a basemap image from a given URL and returns it as a 3D numpy array of size (height, width, 3) with dtype uint8.
-
-        Parameters
-        ----------
-        url_image_basemap : str
-            URL of the basemap image
-
-        Returns
-        -------
-        rgb_image : 3D numpy array
-            3D numpy array of size (height, width, 3) containing the basemap image data with dtype uint8
-        """
-
-        image = rxr.open_rasterio(url_image_basemap)
-        image = np.asarray(image)
-        rgb_image = np.rollaxis(image[::-1][0:3], 0, 3)
-        rgb_image = img_as_ubyte(rgb_image)
-
-        return rgb_image
 
     def find_lines(self, bare_lands_edges):
         """
@@ -711,12 +696,12 @@ class ClearingsExtractor:
         )
         draw = ImageDraw.Draw(power_line_clearings)
         for line_coordinates in lines:
-            draw.line(xy=line_coordinates, fill="yellow", width=3)
+            draw.line(xy=line_coordinates, fill="red", width=3)
         power_line_clearings = np.array(power_line_clearings)
 
         return power_line_clearings
 
-    def extract(self, pred_map, summer_image_path):
+    def extract(self, pred_map):
         """
         Finds power line clearings on a given classification map.
 
@@ -724,8 +709,6 @@ class ClearingsExtractor:
         ----------
         pred_map : 2D numpy array
             A 2D numpy array of size (height, width) containing predicted class labels
-        summer_image_path : str
-            URL of the basemap image
 
         Returns
         -------
@@ -734,28 +717,20 @@ class ClearingsExtractor:
         """
 
         bare_lands_edges = self.edge_detector(pred_map)[-1]
-        self.open_basemap(summer_image_path)
         power_line_clearings = self.find_lines(bare_lands_edges)
 
         return power_line_clearings
 
-    def visualize_algorithm_steps(self, pred_map, image_url):
+    def visualize_algorithm_steps(self, pred_map, image):
         """
-        Visualize the results of the power line clearing extraction algorithm steps.
+        Visualizes the steps of the power line clearings detection algorithm.
 
-        Parameters
-        ----------
-        pred_maps : list of 2D numpy arrays
-            A list of 2D numpy arrays of size (height, width) containing predicted class labels
-        images_url : list of str
-            A list of URLs of the basemap images
+        Parameters:
+        pred_map (2D numpy array): A 2D numpy array of size (height, width) containing predicted class labels.
+        image (3D numpy array): A 3D numpy array of size (height, width, 3) containing the satellite image.
 
-        Notes
-        -----
-        This function visualizes the results of the power line clearing extraction algorithm steps
-        for each experimental area. The results are visualized in a figure with 3 rows and 5 columns,
-        where each row corresponds to an experimental area and each column corresponds to a step of the algorithm.
-        The columns are labeled with the step number and the row is labeled with the experimental area number.
+        Returns:
+        fig (matplotlib Figure): A matplotlib Figure object containing the visualized algorithm steps.
         """
         letters = ["а", "б", "в", "г"]
 
@@ -767,10 +742,9 @@ class ClearingsExtractor:
         ax[0].imshow(model_bare_lands, cmap="mako")
         ax[1].imshow(bare_lands_without_noise, cmap="mako")
         ax[2].imshow(bare_lands_edges, cmap="mako", interpolation="none")
-        rgb = self.open_basemap(image_url)
+        ep.plot_rgb(image, rgb=[2, 1, 0], ax=ax[3], stretch=True)
         power_line_corridors = self.find_lines(bare_lands_edges)
-        ax[3].imshow(rgb * 8)
-        ax[3].imshow(power_line_corridors, alpha=0.6)
+        ax[3].imshow(power_line_corridors)
         for col in range(0, 4):
             ax[col].axis("off")
         ax[0].text(30, 60, letters[0], bbox=dict(facecolor="white"), fontsize=32)
@@ -782,6 +756,7 @@ class ClearingsExtractor:
         return fig
 
 
+
 def find_clearing_algorithm(summer_image_path, winter_image_path, model):
     """
     Final algorithm that finds power line clearings in a given land classification map.
@@ -791,9 +766,9 @@ def find_clearing_algorithm(summer_image_path, winter_image_path, model):
     model : sklearn model
         Trained machine learning model for land classification
     summer_image_path : str
-        URL of the summer satellite image
+        Path of the summer satellite image
     winter_image_path : str
-        URL of the winter satellite image
+        Path of the winter satellite image
 
     Returns
     -------
@@ -808,7 +783,7 @@ def find_clearing_algorithm(summer_image_path, winter_image_path, model):
         image_dataset.image_data_2d_arr, image_dataset.image_data_3d
     )
     clearing_extractor = ClearingsExtractor()
-    power_line_clearings = clearing_extractor.extract(pred_map, summer_image_path)
+    power_line_clearings = clearing_extractor.extract(pred_map)
 
     return power_line_clearings
 
@@ -946,10 +921,21 @@ class ClearingsDetectionMetrics:
         reduced_gdf.to_file(reduced_shp)
 
     def open_raster(self, raster_filepath):
+        """
+        Opens a raster file and extracts the power tower locations.
+
+        Parameters:
+        raster_filepath (str): The path to the raster file.
+
+        Returns:
+        None. The function sets the 'locations' attribute of the object to a 2D numpy array containing the power tower locations.
+        The array is of size (height, width) and contains 1's representing power tower locations and 0's representing background.
+        """
         raster = rxr.open_rasterio(raster_filepath)
         data = np.zeros((raster.shape[1], raster.shape[2]), dtype=np.uint8)
         data = np.array(raster[0, :, :])
         self.locations = data
+
 
     def split_points_into_arrays(self):
         """
@@ -1038,7 +1024,7 @@ class ClearingsDetectionMetrics:
         distance_matrix = self.calculate_distance_matrix(self.locations)
         masked_zeros_distances = self.mask_distances(distance_matrix)
         median_distance = np.ma.median(masked_zeros_distances)
-        self.closeness_value = round(10 / median_distance, 3)
+        self.closeness_value = round(1 / median_distance, 3)
 
     def calculate_integrity_value(self, raster_filepath):
         """
@@ -1067,4 +1053,4 @@ class ClearingsDetectionMetrics:
             min_mask_dist = masked_zeros_distances.min()
             sum_min_mask_dist += min_mask_dist
         integrity_value = sum_min_mask_dist / n_towers
-        self.integrity_value = round(10 / integrity_value, 3)
+        self.integrity_value = round(1 / integrity_value, 3)
