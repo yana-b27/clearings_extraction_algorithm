@@ -1,29 +1,31 @@
 # clearings_extraction_algorithm
 
-The algorithm is designed to automatically identify forest clearings under power lines in Sentinel-2 images. The algorithm consists of Logistic Regression model for selecting objects similar to forest clearings in terms of brightness (e.g. meadows and vegetation-free lands) into a separate class of low-growth vegetation and Probabilistic Hough Transform for finding linear structures on the binary mask of low-growth vegetation from the classification map.
+This algorithm automates the detection of forest clearings beneath power lines using Sentinel-2 satellite imagery. It integrates a Logistic Regression model to classify low-growth vegetation (e.g., meadows and vegetation-free areas) based on brightness and spectral features, followed by a Probabilistic Hough Transform to identify linear structures—indicative of clearings—within the classified binary mask.
 
-A sample of about 15000 pixels was compiled in QGIS software and further rasterized. Before training the model, the images were pre-processed by applying value normalization and saturation contrasting to reduce the brightness of abnormally bright pixels.  Rasterized polygons were used to extract pixels for sampling. In addition to brightness features, features such as SAVI, NDWI (normalized difference water index) and NDBI (normalized difference built-up index) spectral indices were applied in the spectral channels of summer and winter Sentinel-2 images.
+## Methodology
+A training dataset of approximately 15,000 pixels was created using QGIS, where polygons were rasterized to sample pixels. Pre-processing involved normalizing pixel values and applying saturation contrast to mitigate the impact of overly bright pixels. Beyond brightness, additional features were derived from spectral indices—SAVI (Soil-Adjusted Vegetation Index), NDWI (Normalized Difference Water Index), and NDBI (Normalized Difference Built-Up Index)—computed from summer and winter Sentinel-2 imagery.
 
-An experiment was conducted and the classification quality metrics accuracy, f1 score were calculated to identify the machine learning model that best selects the low vegetation class. Logistic regression was chosen as the fastest and highest quality model for our task.
+To determine the optimal machine learning model, an experiment evaluated classification performance using accuracy and F1-score metrics. Logistic Regression emerged as the best performer, balancing speed and quality for isolating the low-growth vegetation class.
 
-The Probabilistic Hough Transform was chosen as the line search algorithm. Before its application, a Gaussian filter is applied to the binary mask of the low-growth vegetation class to distort objects that do not belong to forest clearings, while linear clearings retain linearity. Next, object boundaries were found using binary erosion. Based on the obtained mask of object boundaries, Hough Transform finds lines. Selected lines belong to forest clearings.
+For line detection, the Probabilistic Hough Transform was employed. Prior to its application, a Gaussian filter smooths the binary mask of low-growth vegetation, reducing noise from non-clearing objects while preserving the linearity of clearings. Binary erosion then enhances object boundaries, enabling the Hough Transform to detect lines corresponding to forest clearings.
 
 ## Repository structure
 ```
 .
-├── __pycache__/
-├── images/                           # satellite images for testing the algorithm
-├── model/                            # directory of Logistic Regression model
-├── polygons_sets/                    # polygon sets in shapefile format made in QGIS
-├── power_lines/                      # OpenStreetMap linear vector files of power lines for each image
-├── power_towers/                     # OpenStreetMap point vector files of power towers for each image
-├── results/                          # results of the algorithm in georeferenced .tif format
-├── svg_plots/                        # some plots from Jupyter notebooks
-├── LICENSE
-├── README.md
-├── calculate_metrics.ipynb           # Jupyter notebook with example of use of quality metrics for algorithm output
-├── choose_ml_algorithm.ipynb         # Jupyter notebook with selection of machine learning algorithm for classification
-├── clearings_extraction_algorithm.py # file with clearings extraction algorithm
-├── requirements.txt
-└── use_hough_transform.ipynb         # Jupyter notebook with use of Hough transform for line search
+├── __pycache__/                      # Compiled Python files
+├── images/                           # Sentinel-2 images for algorithm testing
+├── model/                            # Logistic Regression model file
+├── polygons_sets/                    # Shapefiles of polygon sets created in QGIS
+├── power_lines/                      # OpenStreetMap linear vector files of power lines
+├── power_towers/                     # OpenStreetMap point vector files of power towers
+├── results/                          # Georeferenced .tif files with algorithm outputs
+├── svg_plots/                        # Visualizations from Jupyter notebooks
+├── LICENSE                           # License file
+├── README.md                         # Repository overview and instructions
+├── calculate_metrics.ipynb           # Notebook demonstrating quality metrics creation and computation
+├── choose_ml_algorithm.ipynb         # Notebook detailing ML algorithm selection
+├── clearings_extraction_algorithm.py # Core algorithm implementation
+├── requirements.txt                  # Python dependencies
+└── use_hough_transform.ipynb         # Notebook showcasing Hough Transform for line detection
 ```
+This repository provides a complete workflow—from data preparation and model training to line detection and result visualization—tailored for monitoring forest clearings under power lines.
