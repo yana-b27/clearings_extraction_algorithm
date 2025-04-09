@@ -747,10 +747,6 @@ class ClearingsExtractor:
         ax[3].imshow(power_line_corridors)
         for col in range(0, 4):
             ax[col].axis("off")
-        ax[0].text(30, 60, letters[0], bbox=dict(facecolor="white"), fontsize=32)
-        ax[1].text(30, 60, letters[1], bbox=dict(facecolor="white"), fontsize=32)
-        ax[2].text(30, 60, letters[2], bbox=dict(facecolor="white"), fontsize=32)
-        ax[3].text(30, 60, letters[3], bbox=dict(facecolor="white"), fontsize=32)
         plt.tight_layout()
 
         return fig
